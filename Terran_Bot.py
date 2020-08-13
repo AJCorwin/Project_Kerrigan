@@ -28,11 +28,17 @@ class Project_Tychus(BotAI):
             await self.build_workers()
             # Collect Gas
             await self.collect_gas()
+            # Not sure if this works | Basic Idle work limit and worker distribution
+            #await self.distribute_workers()
+            await self.worker_control()
 
 
     async def on_first_step(self):
-        self.worker_cap = 34
+        #Worker cap adjustment to calculation
+        #self.worker_cap = 34
+        self.worker_cap = (len(self.townhalls(UnitTypeId.COMMANDCENTER))* 16) + (len(self.townhalls(UnitTypeId.COMMANDCENTER)) * 6)
         self.refinery_limit = 0
+        #self.refinery_limit = len(self.townhalls(UnitTypeId.COMMANDCENTER).ready) * 1
         self.expansion_locations_keys = list(self.expansion_locations.keys())
         await self.chat_send("Project Tychus Bot")
 
@@ -47,7 +53,7 @@ class Project_Tychus(BotAI):
         self.ready_commandcenteres = self.townhalls(UnitTypeId.COMMANDCENTER).ready
         self.ready_ccs = self.units(COMMANDCENTER).ready
         #self.commandcenter = self.townhalls.same_tech(UnitTypeId.COMMANDCENTER)
-        #self.worker_cap = (len(self.units(COMMANDCENTER))* 16) + (len(self.units(COMMANDCENTER)) * 3)
+        #self.worker_cap = (len(self.units(COMMANDCENTER))* 16) + (len(self.units(COMMANDCENTER)) * 6)
         #self.enemy_units_cost = self.get_food_cost(self.enemy_units) + self.get_food_cost(self.enemy_defense_structures)
         #self.enemy_defense_structures = []
 
@@ -72,7 +78,7 @@ class Project_Tychus(BotAI):
                             if self.can_afford(UnitTypeId.SCV):
                                 #await self.do(commandcenter.train(UnitTypeId.SCV))
                                 commandcenter.train(UnitTypeId.SCV)
-
+                    
     async def increase_supply(self):
         if self.can_afford(UnitTypeId.SUPPLYDEPOT):
             if not self.already_pending(SUPPLYDEPOT):
@@ -91,11 +97,11 @@ class Project_Tychus(BotAI):
 
     async def collect_gas(self):
         refinerys = len(self.units(REFINERY)) + self.already_pending(REFINERY)
-        self.refinery_limit = len(self.townhalls(UnitTypeId.COMMANDCENTER).ready) * 2
+        #self.refinery_limit = len(self.townhalls(UnitTypeId.COMMANDCENTER).ready) * 2
         vespene_deposits = []
         if self.refinery_limit > refinerys:
             for commandcenter in self.ready_commandcenteres:
-                vespene_deposits += self.state.vespene_geyser.closer_than(20.0, commandcenter)
+                vespene_deposits += self.state.vespene_geyser.closer_than(20.0, commandcenteres)
                 if self.can_afford(REFINERY):
                     vespene_deposit = random.choice(vespene_deposits)
                     scv = self.select_build_worker(vespene_deposit.position)
@@ -103,7 +109,15 @@ class Project_Tychus(BotAI):
                         #await self.do(scv.build(UnitTypeId.REFINERY, vespene_deposit))
                         await self.do(scv.build(REFINERY, vespene_deposit))
 
+    async def worker_control(self):
+        scvs = self.units(SCV)
+        allowed_idle_workers = 3
+        if allowed_idle_workers >= len(scvs)-3:
+            await self.distribute_workers()
 
+    def choose_unit(self):
+        self.refinery_limit = len(self.ready_commandcenters) * 1
+        self.worker_cap = 34 + (self.refinery_limit * 3)
 
 sc2.run_game(
     sc2.maps.get("AutomatonLE"),
