@@ -36,14 +36,33 @@ class Project_Abathur(BotAI):
             # Build Spawning Pool
             await self.build_sp()
 
-            #Unit production
+            # Unit production
             await self.queens()
+            await self.op_speedlings()
+
+
+            # Abilities
+                # Assigned queens to hatchers and have them inject 
+                    # Note to self, break this down later when Python understanding is better.
+            await self.injector_queens()
+            await self.queen_injects()
+
+            #await self.operation_tumors()
+
 
 
     async def on_first_step(self):
+        # Create Queen Injector list & Hatchery List
+        self.QueenAssignedHatcheries = {}
+        self.TownhallHatcheryList = {}
+
+
         await self.chat_send("Project Abathur Bot")
         self.headquarter = self.townhalls(UnitTypeId.HATCHERY) or self.townhalls(UnitTypeId.LAIR) or self.townhalls(UnitTypeId.HIVE)
         self.extractor_limit = len(self.headquarter) * 2
+
+        # Enable creep spread
+        #self.enableCreepSpread = True
 
 
     async def on_every_step(self):
@@ -52,14 +71,16 @@ class Project_Abathur(BotAI):
         await self.distribute_workers()
 
     async def build_workers(self):
-        drone_count = self.units(DRONE)
         drone_limit = (len(self.headquarter) * 16) + (self.extractor_limit * 3)
         drones = self.units(DRONE)
+        drone_count = len(drones)
         if self.supply_workers < drone_limit and self.can_afford(UnitTypeId.DRONE):
             for loop_larva in self.larva:
                 if loop_larva.tag in self.unit_tags_received_action:
                     continue
-                loop_larva.train(UnitTypeId.DRONE)
+                if self.already_pending(UnitTypeId.DRONE) < 2:
+                    loop_larva.train(UnitTypeId.DRONE)
+                    break
 
     async def increase_supply(self):
         if self.supply_left < self.supply_cap * 0.20:
@@ -69,6 +90,8 @@ class Project_Abathur(BotAI):
                 if self.can_afford(UnitTypeId.OVERLORD):
                     if not self.already_pending(OVERLORD):
                         loop_larva.train(UnitTypeId.OVERLORD)
+                        break
+
 
     async def collect_gas(self):
         vespene_deposits = []
@@ -105,11 +128,92 @@ class Project_Abathur(BotAI):
         if self.structures(UnitTypeId.SPAWNINGPOOL).ready:
             if hq.is_idle:
                 if self.can_afford(UnitTypeId.QUEEN):
-                    if len(queens_count) < 20:
+                    if len(queens_count) < len(self.headquarter) + 1:
                         hq.train(UnitTypeId.QUEEN)
+
+    # injector queens inspiried by https://github.com/BurnySc2/burny-bots-python-sc2/blob/master/CreepyBot/CreepyBot.py
+    async def injector_queens(self, maxAmountInjectQueens = 5):
+        
+        # hasattr: https://www.programiz.com/python-programming/methods/built-in/hasattr
+        # The hasattr() method returns true if an object has the given named attribute and false if it does not.
+        if not hasattr(self, "queensAssignedHatcheries"):
+            self.queensAssignedHatcheries = {}
+            # if there is no list for queens assigned to hatcheries this creates it
+        
+        if maxAmountInjectQueens == 0:
+            self.queensAssignedHatcheries = {}
+            # if no queens in assigned hatcheries then create this list
+
+        #Lambda is a self contained function / function within another https://www.w3schools.com/python/python_lambda.asp
+        queensNoInjectPartner = self.units(QUEEN).filter(lambda q: q.tag not in self.QueenAssignedHatcheries.keys())
+        basesNoInjectPartner = self.townhalls.filter(lambda h: h.tag not in self.queensAssignedHatcheries.values() and h.build_progress > 0.8)
+        # assigns queens and hatcheries together if they do not have one. Hatcheries need to be at 80% built to have a queen asigned.
+
+        for queen in queensNoInjectPartner:
+            if basesNoInjectPartner.amount == 0:
+                break
+            closestBase = basesNoInjectPartner.closest_to(queen)
+            self.queensAssignedHatcheries[queen.tag] = closestBase.tag
+            basesNoInjectPartner = basesNoInjectPartner - [closestBase]
+            break # so one hatch gets only one queen
+            # .tag is part of the library, it returns all unit tags as a set 
+            # .tags_in(other) Filters all units that have their tags in the ‘other’ set/list/dict
+            # .tags_not_in(other) Filters all units that have their tags not in the ‘other’ set/list/dict
+            # https://burnysc2.github.io/python-sc2/docs/units/index.html
+
+    async def queen_injects(self):
+        aliveQueenTags = [queen.tag for queen in self.units(QUEEN)] # list of numbers (tags / unit IDs)
+        aliveBasesTags = [base.tag for base in self.townhalls]
+
+        # make queens inject if they have 25 or more energy
+        toRemoveTags = []
+
+
+        if hasattr(self, "queensAssignedHatcheries"):
+            for queenTag, hatchTag in self.queensAssignedHatcheries.items():
+                # queen is no longer alive
+                if queenTag not in aliveQueenTags: 
+                    toRemoveTags.append(queenTag)
+                    continue
+                # hatchery / lair / hive is no longer alive
+                if hatchTag not in aliveBasesTags:
+                    toRemoveTags.append(queenTag)
+                    continue
+                # queen and base are alive, try to inject if queen has 25+ energy
+                queen = self.units(QUEEN).find_by_tag(queenTag)            
+                hatch = self.townhalls.find_by_tag(hatchTag)            
+                if hatch.is_ready:
+                    if queen.energy >= 25 and queen.is_idle and not hatch.has_buff(QUEENSPAWNLARVATIMER):
+                        #await self.do(queen(EFFECT_INJECTLARVA, hatch))
+                        queen(AbilityId.EFFECT_INJECTLARVA, hatch)
+                else:
+                    if queen.is_idle and queen.position.distance_to(hatch.position) > 10:
+                        queen(AbilityId.MOVE, hatch.position.to2)
+
+
+            # clear queen tags (in case queen died or hatch got destroyed) from the dictionary outside the iteration loop
+            for tag in toRemoveTags:
+                self.queensAssignedHatcheries.pop(tag)
+
+
+    '''async def operation_tumors(self):
+
+        for self.unit(QUEEN) not in self.queensAssignedHatcheries:'''
+
+    async def op_speedlings(self):
+        if self.can_afford(UnitTypeId.ZERGLING):
+            for loop_larva in self.larva:
+                if loop_larva.tag in self.unit_tags_received_action:
+                    continue
+                if self.already_pending(UnitTypeId.ZERGLING) < 15:
+                    loop_larva.train(UnitTypeId.ZERGLING)
+
+
+
+
 
 sc2.run_game(
     sc2.maps.get("AutomatonLE"),
     [Bot(sc2.Race.Zerg, Project_Abathur()), Computer(sc2.Race.Zerg, sc2.Difficulty.Easy)],
-    realtime = True,
+    realtime = False,
 )
