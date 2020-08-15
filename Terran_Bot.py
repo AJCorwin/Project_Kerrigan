@@ -50,8 +50,11 @@ class Project_Tychus(BotAI):
         #self.army = self.zealots + self.stalkers
         #self.collectedActions = []
         #self.ready_commandcenteres = self.units(COMMANDCENTER).ready
+        self.choose_unit()
         self.ready_commandcenteres = self.townhalls(UnitTypeId.COMMANDCENTER).ready
         self.ready_ccs = self.units(COMMANDCENTER).ready
+        self.commandcenters = self.townhalls(UnitTypeId.COMMANDCENTER).ready
+        hq: Unit = self.townhalls.first
         #self.commandcenter = self.townhalls.same_tech(UnitTypeId.COMMANDCENTER)
         #self.worker_cap = (len(self.units(COMMANDCENTER))* 16) + (len(self.units(COMMANDCENTER)) * 6)
         #self.enemy_units_cost = self.get_food_cost(self.enemy_units) + self.get_food_cost(self.enemy_defense_structures)
@@ -96,18 +99,20 @@ class Project_Tychus(BotAI):
     
 
     async def collect_gas(self):
-        refinerys = len(self.units(REFINERY)) + self.already_pending(REFINERY)
+        self.refinerys = len(self.units(REFINERY)) + self.already_pending(REFINERY)
         #self.refinery_limit = len(self.townhalls(UnitTypeId.COMMANDCENTER).ready) * 2
         vespene_deposits = []
-        if self.refinery_limit > refinerys:
-            for commandcenter in self.ready_commandcenteres:
-                vespene_deposits += self.state.vespene_geyser.closer_than(20.0, commandcenteres)
+        await self.chat_send("I GOT HERE oneeeeeeeeeeeee")
+        if self.refinery_limit > self.refinerys:
+            await self.chat_send("I GOT HERE")
+            for vg in self.vespene_geyser.closer_than(10, hq):
                 if self.can_afford(REFINERY):
-                    vespene_deposit = random.choice(vespene_deposits)
-                    scv = self.select_build_worker(vespene_deposit.position)
-                    if scv:
-                        #await self.do(scv.build(UnitTypeId.REFINERY, vespene_deposit))
-                        await self.do(scv.build(REFINERY, vespene_deposit))
+                        vespene_deposit = random.choice(vespene_deposits)
+                        scv = self.select_build_worker(vespene_deposit.position)
+                        if scv:
+                            #await self.do(scv.build(UnitTypeId.REFINERY, vespene_deposit))
+                            await self.do(scv.build(REFINERY, vespene_deposit))
+
 
     async def worker_control(self):
         scvs = self.units(SCV)
@@ -116,7 +121,7 @@ class Project_Tychus(BotAI):
             await self.distribute_workers()
 
     def choose_unit(self):
-        self.refinery_limit = len(self.ready_commandcenters) * 1
+        self.refinery_limit = 2
         self.worker_cap = 34 + (self.refinery_limit * 3)
 
 sc2.run_game(
