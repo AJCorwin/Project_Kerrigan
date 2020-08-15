@@ -43,19 +43,19 @@ class Project_Abathur(BotAI):
     async def on_first_step(self):
         await self.chat_send("Project Abathur Bot")
         self.headquarter = self.townhalls(UnitTypeId.HATCHERY) or self.townhalls(UnitTypeId.LAIR) or self.townhalls(UnitTypeId.HIVE)
-        self.extractor_limit = len(self.townhalls(UnitTypeId.HATCHERY).ready) * 2
+        self.extractor_limit = len(self.headquarter) * 2
 
 
     async def on_every_step(self):
         self.headquarter = self.townhalls(UnitTypeId.HATCHERY) or self.townhalls(UnitTypeId.LAIR) or self.townhalls(UnitTypeId.HIVE)
-        self.extractor_limit = len(self.townhalls(UnitTypeId.HATCHERY).ready) * 2
+        self.extractor_limit = len(self.headquarter) * 2
         await self.distribute_workers()
 
     async def build_workers(self):
         drone_count = self.units(DRONE)
         drone_limit = (len(self.headquarter) * 16) + (self.extractor_limit * 3)
         drones = self.units(DRONE)
-        if len(drone_count) < drone_limit and self.can_afford(UnitTypeId.DRONE):
+        if self.supply_workers < drone_limit and self.can_afford(UnitTypeId.DRONE):
             for loop_larva in self.larva:
                 if loop_larva.tag in self.unit_tags_received_action:
                     continue
@@ -99,11 +99,14 @@ class Project_Abathur(BotAI):
                             await self.build(UnitTypeId.SPAWNINGPOOL, near=position_towards_map_center, placement_step=1)
  
     async def queens(self):
+        hq: Unit = self.townhalls.first
+        queens_count = self.units(QUEEN)
         self.headquarter = self.townhalls(UnitTypeId.HATCHERY) or self.townhalls(UnitTypeId.LAIR) or self.townhalls(UnitTypeId.HIVE)
         if self.structures(UnitTypeId.SPAWNINGPOOL).ready:
-            if not self.units(UnitTypeId.QUEEN) and headquarter.is_idle:
+            if hq.is_idle:
                 if self.can_afford(UnitTypeId.QUEEN):
-                    hq.train(UnitTypeId.QUEEN)
+                    if len(queens_count) < 20:
+                        hq.train(UnitTypeId.QUEEN)
 
 sc2.run_game(
     sc2.maps.get("AutomatonLE"),
