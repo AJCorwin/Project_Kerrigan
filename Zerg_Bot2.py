@@ -35,11 +35,16 @@ class Project_Abathur(BotAI):
             #await self.worker_control()
             # Build Spawning Pool
             await self.build_sp()
+            # Build Hydra Den
+            await self.build_hydra_den()
+
+
+            await self.expansion_time()
 
             # Unit production
             await self.queens()
             await self.op_speedlings()
-
+            await self.op_hydras()
 
             # Abilities
                 # Assigned queens to hatchers and have them inject 
@@ -48,8 +53,9 @@ class Project_Abathur(BotAI):
             await self.queen_injects()
 
             #await self.operation_tumors()
-
-
+            await self.economy_upgrades()
+            # Combat
+            await self.conquer()
 
     async def on_first_step(self):
         # Create Queen Injector list & Hatchery List
@@ -78,7 +84,7 @@ class Project_Abathur(BotAI):
             for loop_larva in self.larva:
                 if loop_larva.tag in self.unit_tags_received_action:
                     continue
-                if self.already_pending(UnitTypeId.DRONE) < 2:
+                if self.already_pending(UnitTypeId.DRONE) < 99:
                     loop_larva.train(UnitTypeId.DRONE)
                     break
 
@@ -121,6 +127,18 @@ class Project_Abathur(BotAI):
                             position_towards_map_center = self.start_location.towards(map_center, distance=5)
                             await self.build(UnitTypeId.SPAWNINGPOOL, near=position_towards_map_center, placement_step=1)
  
+    async def build_hydra_den(self):
+        drones = self.units(DRONE)
+        self.headquarter = self.townhalls(UnitTypeId.HATCHERY) or self.townhalls(UnitTypeId.LAIR) or self.townhalls(UnitTypeId.HIVE)
+        if self.townhalls(UnitTypeId.LAIR).ready:
+            if self.structures(UnitTypeId.HYDRALISKDEN).amount + self.already_pending(UnitTypeId.HYDRALISKDEN) == 0:
+                if self.can_afford(UnitTypeId.HYDRALISKDEN):
+                    worker_candidates = self.workers.filter(lambda worker: (worker.is_collecting or worker.is_idle) and worker.tag not in self.unit_tags_received_action)
+                    if worker_candidates:
+                            map_center = self.game_info.map_center
+                            position_towards_map_center = self.start_location.towards(map_center, distance=5)
+                            await self.build(UnitTypeId.HYDRALISKDEN, near=position_towards_map_center, placement_step=1)
+
     async def queens(self):
         hq: Unit = self.townhalls.first
         queens_count = self.units(QUEEN)
@@ -201,19 +219,65 @@ class Project_Abathur(BotAI):
         for self.unit(QUEEN) not in self.queensAssignedHatcheries:'''
 
     async def op_speedlings(self):
+        zergling_count = self.units(ZERGLING)
         if self.can_afford(UnitTypeId.ZERGLING):
             for loop_larva in self.larva:
                 if loop_larva.tag in self.unit_tags_received_action:
                     continue
                 if self.already_pending(UnitTypeId.ZERGLING) < 15:
-                    loop_larva.train(UnitTypeId.ZERGLING)
+                    if len(zergling_count) <= 50:
+                        loop_larva.train(UnitTypeId.ZERGLING)
+                    else:
+                        break
 
+    async def op_hydras(self):
+        hydra_count = self.units(HYDRALISK)
+        if self.can_afford(UnitTypeId.HYDRALISK) and self.structures(UnitTypeId.HYDRALISKDEN).ready:
+            for loop_larva in self.larva:
+                if loop_larva.tag in self.unit_tags_received_action:
+                    continue
+                if self.already_pending(UnitTypeId.HYDRALISK) < 15:
+                    if len(hydra_count) <= 50:
+                        loop_larva.train(UnitTypeId.HYDRALISK)
+                    else:
+                        break
 
+    async def expansion_time(self):
+        if self.townhalls.ready.amount + self.already_pending(HATCHERY) < 3:
+            if self.can_afford(UnitTypeId.HATCHERY):
+                await self.expand_now()
 
+    async def conquer(self):
+        if self.supply_army >= 90:
+            for army in self.units(UnitTypeId.HYDRALISK):
+                targets = (self.enemy_units | self.enemy_structures).filter(lambda unit: unit.can_be_attacked)
+                if targets:
+                    target = targets.closest_to(army)
+                    army.attack(target)
+                else:
+                    army.attack(self.enemy_start_locations[0])
+
+        if self.supply_army >= 90:
+            for army in self.units(UnitTypeId.ZERGLING):
+                targets = (self.enemy_units | self.enemy_structures).filter(lambda unit: unit.can_be_attacked)
+                if targets:
+                    target = targets.closest_to(army)
+                    army.attack(target)
+                else:
+                    army.attack(self.enemy_start_locations[0])
+    #async def combat_upgrades(self):
+    
+
+    async def economy_upgrades(self):
+        hq: Unit = self.townhalls.first
+        if self.structures(UnitTypeId.SPAWNINGPOOL).ready:
+            if not self.townhalls(UnitTypeId.LAIR):
+                if self.can_afford(UnitTypeId.LAIR):
+                    hq.build(UnitTypeId.LAIR)
 
 
 sc2.run_game(
     sc2.maps.get("AutomatonLE"),
-    [Bot(sc2.Race.Zerg, Project_Abathur()), Computer(sc2.Race.Zerg, sc2.Difficulty.Easy)],
-    realtime = False,
+    [Bot(sc2.Race.Zerg, Project_Abathur()), Computer(sc2.Race.Terran, sc2.Difficulty.Easy)],
+    realtime = True,
 )
